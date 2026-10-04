@@ -35,7 +35,6 @@ permissions:
 env:
   VERSION_FILE: .version.json
   GHCR_IMAGE: ghcr.io/tcbomc/fndesk-live2d-mirror
-  DH_IMAGE: trseimc/fndesk-live2d-mirror
 
 jobs:
   version-manager:
@@ -181,9 +180,9 @@ jobs:
           TAGS="${{ env.GHCR_IMAGE }}:latest"
           TAGS="${TAGS}"$'\n'"${{ env.GHCR_IMAGE }}:v${VER}"
           TAGS="${TAGS}"$'\n'"${{ env.GHCR_IMAGE }}:v${FULL}"
-          TAGS="${TAGS}"$'\n'"${{ env.DH_IMAGE }}:latest"
-          TAGS="${TAGS}"$'\n'"${{ env.DH_IMAGE }}:v${VER}"
-          TAGS="${TAGS}"$'\n'"${{ env.DH_IMAGE }}:v${FULL}"
+          TAGS="${TAGS}"$'\n'"${{ secrets.DOCKERHUB_REPO }}:latest"
+          TAGS="${TAGS}"$'\n'"${{ secrets.DOCKERHUB_REPO }}:v${VER}"
+          TAGS="${TAGS}"$'\n'"${{ secrets.DOCKERHUB_REPO }}:v${FULL}"
           {
             echo "tags<<GHATAGSEOF"
             printf '%s\n' "${TAGS}"
@@ -219,7 +218,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ${{ env.DH_IMAGE }}
+          repository: ${{ secrets.DOCKERHUB_REPO }}
           short-description: "Fndesk Live2D 资源镜像站：提供与官方完全一致的模型列表与模型下载，支持定时增量同步上游。"
           readme-filepath: ./README.md
           enable-url-completion: true
