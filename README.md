@@ -133,7 +133,7 @@ SU_HOST    = {你的地址}
   镜像内容版权归原作者所有，请遵守相关许可与当地法律使用。
 - 沙箱环境无 docker，本仓库的镜像由 **GitHub Actions** 在推送时自动构建，并推送到：
   - **GHCR**：`ghcr.io/tcbomc/fndesk-live2d-mirror`（见上方「方式一」）
-  - **Docker Hub**：`trseimc/fndesk-live2d-mirror`（需在本仓库 *Settings → Secrets* 配置 `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`，缺省时仅推 GHCR）
+  - **Docker Hub**：`trseimc/fndesk-live2d-mirror`（需在仓库 *Settings → Secrets* 配置 `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`；未配置时 Docker Hub 登录步会失败、构建报错）
 
 ## 镜像版本与标签
 
