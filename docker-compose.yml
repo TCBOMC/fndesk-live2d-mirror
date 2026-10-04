@@ -1,0 +1,25 @@
+services:
+  fndesk-live2d-mirror:
+    build: .
+    image: fndesk-live2d-mirror:latest
+    container_name: fndesk-live2d-mirror
+    ports:
+      - "8080:80"
+    environment:
+      # 要镜像的上游资源站
+      SOURCE_HOST: "https://fndesk.roceos.net:4433"
+      # 同步频率：7d / 24h / 60m / 1w / 3600(秒)，默认 7d（一周一次）
+      SYNC_INTERVAL: "7d"
+      SYNC_WORKERS: "6"
+      # 台词语音同步（/data/ships + /azurlane/*.ogg），默认关
+      SYNC_VOICES: "false"
+      SYNC_VOICE_LANGS: "CN"
+      # 0 = 全部模型；调试可设为小数字（如 2）做部分镜像
+      SYNC_LIMIT: "0"
+      # 本地缺失时是否回源代理（true=透明镜像；false=缺失即 404）
+      PROXY_FALLBACK: "true"
+      # 若容器需走代理才能访问外网，取消下一行注释（host.docker.internal 为宿主机）
+      # HTTPS_PROXY: "http://host.docker.internal:7897"
+    volumes:
+      - ./data:/data/mirror
+    restart: unless-stopped

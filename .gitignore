@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 本地数据（运行时同步产生，不应入库）
+data/
+win_test/
+
+# 本地配置
+.env
+*.log
+
+# 系统
+.DS_Store
+Thumbs.db

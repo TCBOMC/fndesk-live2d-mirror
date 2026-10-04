@@ -1,0 +1,13 @@
+data
+win_test
+*.log
+*.pyc
+__pycache__
+.git
+.gitignore
+.github
+.env
+.env.example
+docker-compose.yml
+serve.py
+README.md
