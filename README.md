@@ -131,4 +131,14 @@ SU_HOST    = {你的地址}
 
 - 上游资源为第三方游戏（碧蓝航线）Live2D 模型，本仓库仅提供**同步/镜像工具**，不内嵌任何模型文件；
   镜像内容版权归原作者所有，请遵守相关许可与当地法律使用。
-- 沙箱环境无 docker，本仓库的镜像由 **GitHub Actions** 在推送时自动构建并推送到 GHCR（见 `.github/workflows/docker.yml`）。
+- 沙箱环境无 docker，本仓库的镜像由 **GitHub Actions** 在推送时自动构建，并推送到：
+  - **GHCR**：`ghcr.io/tcbomc/fndesk-live2d-mirror`（见上方「方式一」）
+  - **Docker Hub**：`trseimc/fndesk-live2d-mirror`（需在本仓库 *Settings → Secrets* 配置 `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`，缺省时仅推 GHCR）
+
+## 镜像版本与标签
+
+镜像标签由 `.github/workflows/docker.yml` 中的 `version-manager` 自动管理（版本号写入 `.version.json`）：
+
+- 每次推送 `main`：build 号 `+1`（如 `v0.1.0` → `v0.1.0.1`）
+- 推送 `v*` tag 或手动 `workflow_dispatch` 升级：正式版本推进、build 归零
+- 每个版本同时产出 `latest`、`vX.Y.Z`、`vX.Y.Z.N` 三种标签，分别推送到 GHCR 与 Docker Hub（若已配置）
