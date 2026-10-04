@@ -1,11 +1,5 @@
 name: Build and Push Docker Image
 
-# 触发条件：
-#   - 推送到 main 分支（普通代码更新 → build 号 +1）
-#   - 推送 v* 标签（如 v1.0.0）→ 以该标签作为正式版本，build 归零
-#   - 手动在 Actions 页面运行，可选 major/minor/patch 升级版本
-# 说明：.version.json / README.md 的改动不触发构建（避免在 version-manager
-#       回写版本号时造成无限循环；回写提交带 [skip ci] 进一步双保险）。
 on:
   push:
     branches: [main]
@@ -13,8 +7,8 @@ on:
       - 'v*'
     paths:
       - '**'
-      - '!.version.json'
       - '!README.md'
+      - '!.version.json'
   workflow_dispatch:
     inputs:
       version_bump:
@@ -27,14 +21,8 @@ on:
           - minor
           - major
 
-# 最小权限原则：默认只授予读代码 + 推包所需权限
-permissions:
-  contents: read
-  packages: write
-
 env:
   VERSION_FILE: .version.json
-  GHCR_IMAGE: ghcr.io/tcbomc/fndesk-live2d-mirror
 
 jobs:
   version-manager:
@@ -55,18 +43,16 @@ jobs:
       - name: Generate version
         id: version
         run: |
-          # 获取所有正式版本 tag（vX.Y.Z），取最大者作为最新版本
-          # 注意：没有 tag 时留空（不回退到 v0.0.0），避免覆盖 .version.json 中的既定版本
-          LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n1)
-          echo "Latest tag: '${LATEST_TAG:-<none>}'"
+          # 获取最新的正式版本 tag（排除 build tag）
+          LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n1 || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
           LATEST_VERSION=${LATEST_TAG#v}
-          if [ -z "$LATEST_VERSION" ]; then LATEST_VERSION="0.0.0"; fi
           echo "Latest version: $LATEST_VERSION"
 
           # 初始化 version.json（如果不存在）
           if [ ! -f "$VERSION_FILE" ]; then
             echo "{\"tag\":\"$LATEST_TAG\",\"build\":0}" > $VERSION_FILE
-            echo "Created version.json from tag: '${LATEST_TAG:-<none>}'"
+            echo "Created version.json from tag: $LATEST_TAG"
           fi
 
           # 读取 version.json
@@ -76,10 +62,12 @@ jobs:
 
           # 判断触发类型
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            # 情况1: 新 tag 触发（例如 v1.0.0）
+            # 情况1: 新 tag 触发
             NEW_TAG="${{ github.ref_name }}"
             NEW_VERSION=${NEW_TAG#v}
             echo "New tag detected: $NEW_TAG"
+
+            # 更新 version.json（使用 echo 避免 EOF 问题）
             echo "{\"tag\":\"$NEW_TAG\",\"build\":0}" > $VERSION_FILE
             BUILD=0
             VERSION=$NEW_VERSION
@@ -88,36 +76,50 @@ jobs:
           elif [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ inputs.version_bump }}" != "" ]; then
             # 情况2: 手动触发版本升级
             IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST_VERSION"
+
             case "${{ inputs.version_bump }}" in
               major)
-                MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                ;;
               minor)
-                MINOR=$((MINOR + 1)); PATCH=0 ;;
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                ;;
               patch)
-                PATCH=$((PATCH + 1)) ;;
+                PATCH=$((PATCH + 1))
+                ;;
             esac
+
             NEW_VERSION="$MAJOR.$MINOR.$PATCH"
             NEW_TAG="v$NEW_VERSION"
             echo "Manual version bump: $NEW_TAG"
+
+            # 更新 version.json（使用 echo 避免 EOF 问题）
             echo "{\"tag\":\"$NEW_TAG\",\"build\":0}" > $VERSION_FILE
             BUILD=0
             VERSION=$NEW_VERSION
             TAG=$NEW_TAG
 
           else
-            # 情况3: 普通代码更新（build 号 +1）
-            # 仅当存在「真实的新 tag」且不同于已保存版本时才重置（避免无 tag 时回退到 v0.0.0）
-            if [ -n "$LATEST_TAG" ] && [ "$LATEST_TAG" != "$SAVED_TAG" ]; then
+            # 情况3: 普通代码更新
+            # 检查当前最新的 tag 是否和 version.json 中保存的一致
+            if [ "$LATEST_TAG" != "$SAVED_TAG" ]; then
+              # 有新的 tag，但这次不是 tag 触发（可能是手动创建的 tag）
               echo "Latest tag changed to $LATEST_TAG, updating version.json"
               echo "{\"tag\":\"$LATEST_TAG\",\"build\":0}" > $VERSION_FILE
               BUILD=0
               VERSION=$LATEST_VERSION
               TAG=$LATEST_TAG
             else
+              # 正常的代码更新，build 加 1
               BUILD=$((BUILD + 1))
               VERSION=${SAVED_TAG#v}
               TAG=$SAVED_TAG
               echo "Code update: build number increased to $BUILD"
+
+              # 更新 build 号
               echo "{\"tag\":\"$TAG\",\"build\":$BUILD}" > $VERSION_FILE
             fi
           fi
@@ -151,18 +153,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -170,38 +162,18 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 组装镜像标签：同时推 GHCR 与 Docker Hub（Docker Hub 需在仓库 Secrets 配置 DOCKERHUB_USERNAME / DOCKERHUB_TOKEN）
-      - name: Compose image tags
-        id: tags
-        shell: bash
-        run: |
-          VER="${{ needs.version-manager.outputs.version }}"
-          FULL="${{ needs.version-manager.outputs.full_version }}"
-          TAGS="${{ env.GHCR_IMAGE }}:latest"
-          TAGS="${TAGS}"$'\n'"${{ env.GHCR_IMAGE }}:v${VER}"
-          TAGS="${TAGS}"$'\n'"${{ env.GHCR_IMAGE }}:v${FULL}"
-          TAGS="${TAGS}"$'\n'"${{ secrets.DOCKERHUB_REPO }}:latest"
-          TAGS="${TAGS}"$'\n'"${{ secrets.DOCKERHUB_REPO }}:v${VER}"
-          TAGS="${TAGS}"$'\n'"${{ secrets.DOCKERHUB_REPO }}:v${FULL}"
-          {
-            echo "tags<<GHATAGSEOF"
-            printf '%s\n' "${TAGS}"
-            echo "GHATAGSEOF"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Build and Push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ steps.tags.outputs.tags }}
+          tags: |
+            ${{ secrets.DOCKERHUB_REPO }}:latest
+            ${{ secrets.DOCKERHUB_REPO }}:v${{ needs.version-manager.outputs.version }}
+            ${{ secrets.DOCKERHUB_REPO }}:v${{ needs.version-manager.outputs.full_version }}
           platforms: linux/amd64,linux/arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           labels: |
-            org.opencontainers.image.title=Fndesk Live2D Mirror
-            org.opencontainers.image.description=Fndesk Live2D 资源镜像站（模型列表 + 模型下载，定时增量同步上游）
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.source=${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.version-manager.outputs.full_version }}
 
@@ -219,6 +191,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ secrets.DOCKERHUB_REPO }}
-          short-description: "Fndesk Live2D 资源镜像站：提供与官方完全一致的模型列表与模型下载，支持定时增量同步上游。"
+          short-description: "Fndesk Live2D 资源镜像站：提供模型列表与下载，定时同步上游。"
           readme-filepath: ./README.md
           enable-url-completion: true
